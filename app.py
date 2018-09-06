@@ -1,9 +1,14 @@
-from flask import Flask, render_template
+from flask import Flask, render_template,request, Response, stream_with_context, jsonify
 import random, logging
+from redis import Redis
+import os, time, json
+
+
+db = Redis(host='redis', port=6379)
 
 app = Flask(__name__)
-app.logger.addHandler(logging.StreamHandler())
-app.logger.setLevel(logging.INFO)
+#app.logger.addHandler(logging.StreamHandler())
+#app.logger.setLevel(logging.INFO)
 
 images_path = 'data/images.txt'
 try:
@@ -35,5 +40,30 @@ def index():
 def home():
     return ("There is no place like 127.0.0.1")
 
+@app.route('/count')
+def hello():
+    db.incr('count')
+    return 'Count is %s.' % db.get('count')
+
+@app.route('/<path:path>', methods = ['PUT', 'GET'])
+def homehome(path):
+
+    if (request.method == 'PUT'):
+       event = request.json
+       event['last_updated'] = int(time.time())
+       event['ttl'] = ttl
+       db.delete(path) #remove old keys
+       db.hmset(path, event)
+       db.expire(path, ttl)
+       return flask.jsonify(event), 201
+
+
+    if not db.exists(path):
+        return "Error: thing doesn't exist"
+
+    event = db.hgetall(path)
+    event["ttl"] = db.ttl(path)
+    return flask.jsonify(event), 200
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0")
+    app.run(host="0.0.0.0", debug=True)
